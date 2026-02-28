@@ -2,7 +2,8 @@
 #
 # Usa Groq + LLaMA 3.3 70B para analizar precios de competidores
 # y generar estrategias de mercado accionables en JSON.
-
+from dotenv import load_dotenv
+load_dotenv()
 import json
 import logging
 import os
