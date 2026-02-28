@@ -277,6 +277,41 @@
       box-shadow: 0 0 12px var(--accent-glow);
     }
 
+    .btn-export {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--green);
+      font-size: 10px;
+      padding: 5px 12px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-export:hover {
+      border-color: var(--green);
+      box-shadow: 0 0 12px rgba(0,216,138,0.2);
+    }
+
+    /* ── Price Chart ── */
+    .card-chart {
+      border-top: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .chart-header {
+      padding: 8px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+    }
+
     /* ═══════════════════════════════════════════════════════
        EMPTY STATE
     ═══════════════════════════════════════════════════════ */
@@ -839,6 +874,9 @@
                placeholder="URL de la tienda (ej: https://allbirds.com)"
                required>
         <button class="btn btn-primary" type="submit" data-es="+ AGREGAR" data-en="+ ADD">+ AGREGAR</button>
+        {% if dashboard_data %}
+        <a href="/export/csv/all" class="btn btn-export" style="text-decoration:none" data-es="⬇ REPORTE COMPLETO" data-en="⬇ FULL REPORT">⬇ REPORTE COMPLETO</a>
+        {% endif %}
       </form>
     </div>
 
@@ -887,6 +925,7 @@
             <span class="ts" data-es="Último análisis:" data-en="Last analysis:">Último análisis:</span>
             <span class="ts">{{ analysis.timestamp.strftime('%d/%m %H:%M') }}</span>
             {% endif %}
+            <a href="/export/csv/{{ comp.id }}" class="btn btn-export">⬇ CSV</a>
             <form action="/run-now/{{ comp.id }}" method="POST" style="display:inline">
               <button class="btn btn-run" type="submit">▶ ANALIZAR</button>
             </form>
@@ -997,6 +1036,19 @@
         </div>
         {% endif %}
 
+        <!-- Gráfico de tendencia de precios -->
+        {% if products %}
+        <div class="card-chart">
+          <div class="chart-header">
+            <span data-es="// Tendencia de Precios" data-en="// Price Trend">// Tendencia de Precios</span>
+            <span class="ts" data-es="últimos registros" data-en="latest records">últimos registros</span>
+          </div>
+          <div style="padding: 16px;">
+            <canvas id="chart-{{ comp.id }}" height="80"></canvas>
+          </div>
+        </div>
+        {% endif %}
+
       </div>
       {% endfor %}
 
@@ -1031,6 +1083,7 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
   // ── AUTO REFRESH ─────────────────────────────────────────────
   setTimeout(() => location.reload(), 5 * 60 * 1000);
@@ -1072,6 +1125,68 @@
     // Guardar lang en cookie para que Flask lo lea si se necesita en el futuro
     document.cookie = `warroom_lang=${lang};path=/;max-age=31536000`;
   }
+
+  // ── CARGAR GRÁFICOS ───────────────────────────────────────────
+  Chart.defaults.color = '#454860';
+  Chart.defaults.borderColor = '#1c1f2e';
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  Chart.defaults.font.size   = 10;
+
+  async function loadChart(compId) {
+    const canvas = document.getElementById('chart-' + compId);
+    if (!canvas) return;
+    try {
+      const res  = await fetch('/api/price-history/' + compId);
+      const data = await res.json();
+      if (!data.datasets || data.datasets.length === 0) {
+        canvas.parentElement.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:11px;">Sin suficientes datos para graficar</div>';
+        return;
+      }
+      new Chart(canvas, {
+        type: 'line',
+        data: data,
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { boxWidth: 8, padding: 12, font: { size: 9 } }
+            },
+            tooltip: {
+              backgroundColor: '#0d0f18',
+              borderColor: '#1c1f2e',
+              borderWidth: 1,
+              callbacks: {
+                label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: '#1c1f2e' },
+              ticks: { maxTicksLimit: 6, font: { size: 9 } }
+            },
+            y: {
+              grid: { color: '#1c1f2e' },
+              ticks: {
+                font: { size: 9 },
+                callback: val => '$' + val.toFixed(0)
+              }
+            }
+          }
+        }
+      });
+    } catch(e) {
+      console.error('Error cargando gráfico:', e);
+    }
+  }
+
+  // Cargar gráficos de todos los competidores
+  document.querySelectorAll('canvas[id^="chart-"]').forEach(canvas => {
+    const compId = canvas.id.replace('chart-', '');
+    loadChart(compId);
+  });
 </script>
 </body>
 </html>

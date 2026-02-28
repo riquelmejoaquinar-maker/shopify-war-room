@@ -1,168 +1,135 @@
 # ai_engine.py — Shopify War Room · Motor de Inteligencia Artificial
-#
-# Usa Groq + LLaMA 3.3 70B para analizar precios de competidores
-# y generar estrategias de mercado accionables en JSON.
-from dotenv import load_dotenv
-load_dotenv()
+
 import json
 import logging
 import os
 import re
+import time
 from datetime import datetime
-
-from groq import Groq
+from dotenv import load_dotenv
+load_dotenv()
 
 log = logging.getLogger("war_room.ai")
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
-SYSTEM_PROMPT_ES = """Eres un Lead Estratega de E-commerce y Data Quant con 15 años de experiencia
-en inteligencia competitiva, estrategia de precios y dinámica del mercado Shopify.
+SYSTEM_PROMPT_ES = """Eres un Lead Estratega de E-commerce y Data Quant.
+Tu trabajo: analizar productos de competidores y devolver SOLO un JSON válido.
+NUNCA escribas markdown, texto explicativo, ni bloques de código.
+SOLO el objeto JSON crudo, sin nada antes ni después."""
 
-Tu trabajo es analizar datos de productos de competidores y devolver una tesis de mercado precisa y accionable.
-
-SIEMPRE respondes con un único objeto JSON válido. Sin markdown, sin explicación, sin preámbulo.
-Solo el JSON crudo.
-
-Tu análisis debe ser basado en datos, específico y brutalmente accionable. Pensá como un quant de hedge fund 
-aplicado al e-commerce: encontrá el edge, dimensioná la posición, ejecutá."""
-
-SYSTEM_PROMPT_EN = """You are a Lead E-commerce Strategist & Data Quant with 15 years of experience 
-in competitive intelligence, pricing strategy, and Shopify market dynamics.
-
-Your job is to analyze competitor product data and return a precise, actionable market thesis.
-
-You ALWAYS respond with a single valid JSON object. No markdown, no explanation, no preamble.
-Just the raw JSON.
-
-Your analysis must be data-driven, specific, and ruthlessly actionable. Think like a hedge fund 
-quant applied to e-commerce: find the edge, size the position, execute."""
+SYSTEM_PROMPT_EN = """You are a Lead E-commerce Strategist & Data Quant.
+Your job: analyze competitor products and return ONLY valid JSON.
+NEVER write markdown, explanatory text, or code blocks.
+ONLY the raw JSON object, nothing before or after."""
 
 
-def build_analysis_prompt(productos_json: list[dict], competitor_name: str = "", lang: str = "es") -> str:
-    """Construye el prompt con los datos del competidor."""
-
+def build_analysis_prompt(productos_json, competitor_name="", lang="es"):
     products_text = "\n".join([
-        f"- {p['product_name']} | Price: ${p['price']:.2f} {p.get('currency','USD')} | Updated: {p.get('updated_at','N/A')[:10]}"
+        f"- {p['product_name']} | Price: ${p['price']:.2f}"
         for p in productos_json
     ])
-
-    prices = [p["price"] for p in productos_json if p["price"] > 0]
+    prices    = [p["price"] for p in productos_json if p["price"] > 0]
     avg_price = sum(prices) / len(prices) if prices else 0
     min_price = min(prices) if prices else 0
     max_price = max(prices) if prices else 0
+    lang_instruction = "IMPORTANT: Write ALL text values in SPANISH." if lang == "es" else "IMPORTANT: Write ALL text values in ENGLISH."
 
-    lang_instruction = (
-        "Respond with all text fields in SPANISH (español). Numbers and keys stay in English."
-        if lang == "es" else
-        "Respond with all text fields in ENGLISH."
-    )
-
-    return f"""Analyze this competitor's product catalog and generate a market intelligence report.
-{lang_instruction}
-
-COMPETITOR: {competitor_name or "Unknown Store"}
-PRODUCTS SCRAPED ({len(productos_json)} items):
+    return f"""{lang_instruction}
+Competitor: {competitor_name}
+Products:
 {products_text}
+Avg: ${avg_price:.2f} | Min: ${min_price:.2f} | Max: ${max_price:.2f}
 
-PRICE STATS:
-- Average: ${avg_price:.2f}
-- Range: ${min_price:.2f} – ${max_price:.2f}
-- Total products analyzed: {len(productos_json)}
+Return ONLY this JSON structure filled with your analysis:
+{{"market_bias":"AGGRESSIVE","sentiment_score":75,"sentiment_reasoning":"your text","alpha_opportunity":{{"product":"product name","reason":"why","suggested_action":"action","estimated_impact":"HIGH"}},"high_conviction_bets":[{{"bet":"action","probability":"80%","timeframe":"NOW","reasoning":"why"}},{{"bet":"action","probability":"70%","timeframe":"THIS_WEEK","reasoning":"why"}},{{"bet":"action","probability":"60%","timeframe":"THIS_MONTH","reasoning":"why"}}],"price_gap_analysis":"your text","risk_assessment":"your text"}}
 
-Return ONLY this JSON structure (no extra text):
-
-{{
-  "market_bias": "AGGRESSIVE" | "DEFENSIVE" | "NEUTRAL",
-  "sentiment_score": <integer 0-100>,
-  "sentiment_reasoning": "<2 sentences explaining the score>",
-  "alpha_opportunity": {{
-    "product": "<exact product name from the list>",
-    "reason": "<why this product is the attack vector>",
-    "suggested_action": "<concrete action to take>",
-    "estimated_impact": "HIGH" | "MEDIUM" | "LOW"
-  }},
-  "high_conviction_bets": [
-    {{
-      "bet": "<specific actionable strategy>",
-      "probability": "<percentage chance of success>",
-      "timeframe": "<when to execute: NOW / THIS_WEEK / THIS_MONTH>",
-      "reasoning": "<data-driven reason>"
-    }},
-    {{
-      "bet": "<specific actionable strategy>",
-      "probability": "<percentage chance of success>",
-      "timeframe": "<when to execute>",
-      "reasoning": "<data-driven reason>"
-    }},
-    {{
-      "bet": "<specific actionable strategy>",
-      "probability": "<percentage chance of success>",
-      "timeframe": "<when to execute>",
-      "reasoning": "<data-driven reason>"
-    }}
-  ],
-  "price_gap_analysis": "<brief analysis of pricing gaps and opportunities>",
-  "risk_assessment": "<main risks to monitor>"
-}}
-
-MARKET_BIAS logic:
-- AGGRESSIVE: clear pricing gaps, stock opportunities, competitor weaknesses visible → attack now
-- DEFENSIVE: competitor is strong, prices are competitive, market is tight → protect your margins
-- NEUTRAL: mixed signals, gather more data before moving
-
-Be specific. Reference actual product names and prices from the data."""
+market_bias: AGGRESSIVE=attack now | DEFENSIVE=protect margins | NEUTRAL=gather more data
+{lang_instruction}"""
 
 
-def generate_market_thesis(productos_json: list[dict], competitor_id: int,
-                           competitor_name: str, db, MarketAnalysis, lang: str = "es") -> dict:
-    """
-    Función principal del motor IA.
-    lang: "es" para español, "en" para inglés.
-    """
+def clean_json_response(raw):
+    """Extrae el JSON de la respuesta aunque tenga texto extra."""
+    raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start != -1 and end > start:
+        return raw[start:end]
+    return raw
+
+
+def generate_market_thesis(productos_json, competitor_id, competitor_name, db, MarketAnalysis, lang="es"):
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("GROQ_API_KEY no está configurada en las variables de entorno.")
+        raise ValueError("GROQ_API_KEY no está configurada.")
 
-    # Fix para el error 'proxies' en versiones nuevas de httpx
+    from groq import Groq
     import httpx
-    http_client = httpx.Client(timeout=30.0)
-    client = Groq(api_key=api_key, http_client=http_client, max_retries=2)
+
     system_prompt = SYSTEM_PROMPT_ES if lang == "es" else SYSTEM_PROMPT_EN
 
-    log.info(f"  🤖 Enviando {len(productos_json)} productos a LLaMA 3.3 70B (lang={lang})...")
+    try:
+        http_client = httpx.Client(timeout=httpx.Timeout(60.0))
+        client = Groq(api_key=api_key, http_client=http_client)
+    except Exception:
+        client = Groq(api_key=api_key)
 
-    # ── Llamada a Groq ──────────────────────────────────────────
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": build_analysis_prompt(productos_json, competitor_name, lang)},
-        ],
-        temperature=0.2,
-        max_tokens=1500,
-    )
+    log.info(f"  Analizando {competitor_name} ({len(productos_json)} productos)...")
 
-    raw_text = response.choices[0].message.content.strip()
-    log.info(f"  ✓ Respuesta recibida ({len(raw_text)} chars)")
+    last_error = None
+    raw_text = ""
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": build_analysis_prompt(productos_json, competitor_name, lang)},
+                ],
+                temperature=0.1,
+                max_tokens=1200,
+            )
+            raw_text = response.choices[0].message.content.strip()
+            log.info(f"  Respuesta recibida (intento {attempt+1})")
+            break
+        except Exception as e:
+            last_error = e
+            log.warning(f"  Intento {attempt+1} fallido: {e}")
+            time.sleep(2 * (attempt + 1))
+    else:
+        raise Exception(f"Connection error: {last_error}")
 
-    # ── Parsear JSON (limpiar backticks si los pone) ────────────
-    clean_text = re.sub(r"^```(?:json)?", "", raw_text).rstrip("```").strip()
-    analysis_data = json.loads(clean_text)
+    clean_text = clean_json_response(raw_text)
 
-    # ── Extraer campos ──────────────────────────────────────────
+    try:
+        analysis_data = json.loads(clean_text)
+    except json.JSONDecodeError as e:
+        log.error(f"  JSON invalido: {e} | Raw: {raw_text[:300]}")
+        analysis_data = {
+            "market_bias": "NEUTRAL",
+            "sentiment_score": 50,
+            "sentiment_reasoning": "Error al parsear respuesta.",
+            "alpha_opportunity": {
+                "product": productos_json[0]["product_name"] if productos_json else "N/A",
+                "reason": "Analisis manual requerido.",
+                "suggested_action": "Reintentar analisis.",
+                "estimated_impact": "MEDIUM"
+            },
+            "high_conviction_bets": [],
+            "price_gap_analysis": "Error en analisis automatico.",
+            "risk_assessment": "Reintentar."
+        }
+
     bias            = analysis_data.get("market_bias", "NEUTRAL")
     sentiment_score = int(analysis_data.get("sentiment_score", 50))
     alpha_opp       = analysis_data.get("alpha_opportunity", {})
     bets            = analysis_data.get("high_conviction_bets", [])
 
     alpha_text = (
-        f"{alpha_opp.get('product','')} — {alpha_opp.get('reason','')} "
-        f"[{alpha_opp.get('suggested_action','')}]"
+        f"{alpha_opp.get('product','')} - {alpha_opp.get('reason','')} [{alpha_opp.get('suggested_action','')}]"
         if isinstance(alpha_opp, dict) else str(alpha_opp)
     )
 
-    # ── Guardar en base de datos ────────────────────────────────
     record = MarketAnalysis(
         competitor_id        = competitor_id,
         sentiment_score      = sentiment_score,
@@ -175,5 +142,5 @@ def generate_market_thesis(productos_json: list[dict], competitor_id: int,
     db.session.add(record)
     db.session.commit()
 
-    log.info(f"  💾 Análisis guardado: {bias} | Score: {sentiment_score} | Alpha: {alpha_opp.get('product','?')[:40]}")
+    log.info(f"  Guardado: {bias} | Score: {sentiment_score}")
     return analysis_data
