@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shopify War Room</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #07080d;
+      --surface:   #0d0f18;
+      --surface2:  #12151f;
+      --border:    #1c1f2e;
+      --border2:   #252840;
+      --text:      #b8bcd4;
+      --text-dim:  #454860;
+      --text-bright: #e8eaf5;
+      --accent:    #5c6cff;
+      --accent-glow: rgba(92,108,255,0.25);
+      --green:     #00d88a;
+      --green-dim: rgba(0,216,138,0.1);
+      --red:       #ff3b5c;
+      --red-dim:   rgba(255,59,92,0.1);
+      --yellow:    #ffc94d;
+      --yellow-dim:rgba(255,201,77,0.1);
+      --neutral:   #8892b0;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.25;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       LAYOUT
+    ═══════════════════════════════════════════════════════ */
+    .page { position: relative; z-index: 1; }
+
+    /* ═══════════════════════════════════════════════════════
+       HEADER
+    ═══════════════════════════════════════════════════════ */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      height: 60px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(7,8,13,0.9);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      background: var(--accent);
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .logo-text {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--text-bright);
+      letter-spacing: 1px;
+    }
+
+    .logo-text span { color: var(--accent); }
+
+    .header-stats {
+      display: flex;
+      gap: 32px;
+    }
+
+    .hstat {
+      text-align: right;
+    }
+
+    .hstat-val {
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-bright);
+    }
+
+    .hstat-label {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--green);
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: live-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes live-pulse {
+      0%, 100% { opacity:1; box-shadow: 0 0 0 0 rgba(0,216,138,0.4); }
+      50% { opacity:0.7; box-shadow: 0 0 0 6px rgba(0,216,138,0); }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       FLASH MESSAGES
+    ═══════════════════════════════════════════════════════ */
+    .flashes {
+      padding: 12px 32px 0;
+    }
+
+    .flash {
+      padding: 10px 16px;
+      border-radius: 3px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid;
+    }
+
+    .flash.success { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+    .flash.error   { background: var(--red-dim);   border-color: var(--red);   color: var(--red); }
+    .flash.warning { background: var(--yellow-dim);border-color: var(--yellow);color: var(--yellow); }
+    .flash.info    { background: rgba(92,108,255,0.08); border-color: var(--accent); color: var(--accent); }
+
+    /* ═══════════════════════════════════════════════════════
+       MAIN CONTENT
+    ═══════════════════════════════════════════════════════ */
+    .main {
+      padding: 28px 32px 60px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       ADD COMPETITOR FORM
+    ═══════════════════════════════════════════════════════ */
+    .add-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .add-section::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+
+    .add-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .add-form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .form-input {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text-bright);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 9px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .form-input::placeholder { color: var(--text-dim); }
+    .form-input:focus { border-color: var(--accent); }
+
+    .btn {
+      padding: 9px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #7080ff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--text-dim);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .btn-run {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--accent);
+      font-size: 10px;
+      padding: 5px 12px;
+    }
+
+    .btn-run:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       EMPTY STATE
+    ═══════════════════════════════════════════════════════ */
+    .empty-state {
+      text-align: center;
+      padding: 80px 32px;
+      border: 1px dashed var(--border2);
+    }
+
+    .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+    .empty-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; color: var(--text-bright); margin-bottom: 8px; }
+    .empty-sub { color: var(--text-dim); font-size: 12px; }
+
+    /* ═══════════════════════════════════════════════════════
+       COMPETITOR CARDS
+    ═══════════════════════════════════════════════════════ */
+    .cards-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .comp-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Card Header ── */
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .card-header-left { display: flex; align-items: center; gap: 12px; }
+
+    .comp-avatar {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .comp-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text-bright);
+    }
+
+    .comp-url {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+
+    .card-header-right { display: flex; gap: 8px; align-items: center; }
+
+    /* ── Card Body ── */
+    .card-body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Barra de bias — fila superior full width */
+    .bias-bar {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .bias-value {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .bias-value.aggressive { color: var(--green); }
+    .bias-value.defensive  { color: var(--red); }
+    .bias-value.neutral    { color: var(--yellow); }
+
+    .bias-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .bias-score-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      max-width: 300px;
+    }
+
+    .bias-score-num {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      white-space: nowrap;
+    }
+
+    .bias-bar-track {
+      flex: 1;
+      height: 3px;
+      background: var(--border2);
+    }
+
+    .bias-bar-fill {
+      height: 100%;
+      transition: width 1s ease;
+    }
+
+    .bias-bar-fill.high { background: var(--green); }
+    .bias-bar-fill.mid  { background: var(--yellow); }
+    .bias-bar-fill.low  { background: var(--red); }
+
+    .bias-groq-tag {
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    /* 3 columnas debajo de la bias bar */
+    .card-cols {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      min-height: 180px;
+    }
+
+    .card-section {
+      padding: 16px 20px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-section:last-child { border-right: none; }
+
+    .section-label {
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* ── Alpha Opportunity ── */
+    .alpha-box {
+      background: rgba(255,201,77,0.04);
+      border: 1px solid rgba(255,201,77,0.2);
+      overflow: hidden;
+    }
+
+    .alpha-tag {
+      display: block;
+      width: 100%;
+      background: rgba(255,201,77,0.12);
+      color: var(--yellow);
+      font-size: 8px;
+      letter-spacing: 2px;
+      padding: 5px 10px;
+      font-weight: 600;
+      border-bottom: 1px solid rgba(255,201,77,0.15);
+    }
+
+    .alpha-text {
+      display: block;
+      color: var(--text);
+      font-size: 11px;
+      line-height: 1.75;
+      word-break: break-word;
+      padding: 10px 12px;
+    }
+
+    /* ── High Conviction Bets ── */
+    .bets-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bet-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 8px 10px;
+      background: var(--surface2);
+      border-left: 2px solid var(--border2);
+      transition: border-color 0.2s;
+    }
+
+    .bet-item:hover { border-left-color: var(--accent); }
+
+    .bet-prob {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--accent);
+      min-width: 40px;
+      flex-shrink: 0;
+    }
+
+    .bet-text { font-size: 11px; line-height: 1.5; color: var(--text); }
+    .bet-meta { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ── Products Table ── */
+    .card-products {
+      border-top: 1px solid var(--border);
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .products-header {
+      padding: 10px 20px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+    }
+
+    .product-cell {
+      padding: 10px 16px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .product-cell:nth-child(5n) { border-right: none; }
+
+    .product-name {
+      font-size: 10px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
+      margin-bottom: 3px;
+    }
+
+    .product-price {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-bright);
+    }
+
+    .product-time { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+
+    /* ── No analysis state ── */
+    .no-analysis {
+      padding: 20px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+
+    .no-analysis-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.3; }
+
+    /* ── Timestamp ── */
+    .ts {
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════════ */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 36px;
+      background: rgba(7,8,13,0.95);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 32px;
+      gap: 24px;
+      font-size: 10px;
+      color: var(--text-dim);
+      backdrop-filter: blur(10px);
+      z-index: 100;
+    }
+
+    .footer-item { display: flex; align-items: center; gap: 6px; }
+    .footer-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--green); }
+
+    .ticker-wrap { flex: 1; overflow: hidden; }
+    .ticker {
+      white-space: nowrap;
+      animation: ticker 20s linear infinite;
+    }
+    @keyframes ticker {
+      from { transform: translateX(100%); }
+      to   { transform: translateX(-100%); }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════════════════════ */
+    .text-green  { color: var(--green); }
+    .text-red    { color: var(--red); }
+    .text-yellow { color: var(--yellow); }
+    .text-accent { color: var(--accent); }
+    .text-bright { color: var(--text-bright); }
+
+    .mt-8  { margin-top: 8px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-20 { margin-top: 20px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+    /* ── Language Toggle ── */
+    .lang-toggle {
+      display: flex;
+      gap: 2px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      padding: 3px;
+    }
+
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .lang-btn:hover { color: var(--text); }
+
+    .lang-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Translatable elements ── */
+    [data-es], [data-en] { transition: opacity 0.2s; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ═══ HEADER ══════════════════════════════════════════════ -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">⬡</div>
+      <div class="logo-text">SHOPIFY <span>WAR ROOM</span></div>
+    </div>
+
+    <div class="header-stats">
+      <div class="hstat">
+        <div class="hstat-val">{{ dashboard_data|length }}</div>
+        <div class="hstat-label" data-es="Competidores" data-en="Competitors">Competidores</div>
+      </div>
+      <div class="hstat">
+        <div class="hstat-val">{{ total_products }}</div>
+        <div class="hstat-label" data-es="Precios Guardados" data-en="Saved Prices">Precios Guardados</div>
+      </div>
+      <div class="hstat">
+        <div class="hstat-val">{{ total_analyses }}</div>
+        <div class="hstat-label" data-es="Análisis IA" data-en="AI Analyses">Análisis IA</div>
+      </div>
+      <div class="lang-toggle">
+        <button class="lang-btn active" id="btn-es" onclick="setLang('es')">ES</button>
+        <button class="lang-btn" id="btn-en" onclick="setLang('en')">EN</button>
+      </div>
+      <div class="live-indicator">
+        <div class="live-dot"></div>
+        LIVE
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══ FLASH MESSAGES ══════════════════════════════════════ -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flashes">
+      {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  <!-- ═══ MAIN ═════════════════════════════════════════════════ -->
+  <main class="main">
+
+    <!-- Agregar competidor -->
+    <div class="add-section">
+      <div class="add-title" data-es="// Agregar Tienda Shopify" data-en="// Add Shopify Store">// Agregar Tienda Shopify</div>
+      <form class="add-form" action="/add" method="POST">
+        <input class="form-input" type="text" name="name"
+               data-placeholder-es="Nombre del competidor (ej: AllBirds)"
+               data-placeholder-en="Competitor name (e.g. AllBirds)"
+               placeholder="Nombre del competidor (ej: AllBirds)"
+               required>
+        <input class="form-input" type="text" name="url"
+               placeholder="URL de la tienda (ej: https://allbirds.com)"
+               required>
+        <button class="btn btn-primary" type="submit" data-es="+ AGREGAR" data-en="+ ADD">+ AGREGAR</button>
+      </form>
+    </div>
+
+    <!-- Estado vacío -->
+    {% if not dashboard_data %}
+    <div class="empty-state">
+      <div class="empty-icon">🎯</div>
+      <div class="empty-title">Sin competidores todavía</div>
+      <div class="empty-sub">Agregá la URL de una tienda Shopify arriba para empezar a espiarla.</div>
+    </div>
+
+    {% else %}
+
+    <!-- Cards de competidores -->
+    <div class="cards-grid">
+
+      {% for item in dashboard_data %}
+      {% set comp     = item.competitor %}
+      {% set analysis = item.analysis %}
+      {% set products = item.products %}
+      {% set bets     = item.bets %}
+
+      {% set bias_class = 'neutral' %}
+      {% if analysis %}
+        {% if analysis.bias == 'AGGRESSIVE' %}{% set bias_class = 'aggressive' %}
+        {% elif analysis.bias == 'DEFENSIVE' %}{% set bias_class = 'defensive' %}
+        {% endif %}
+      {% endif %}
+
+      {% set score = analysis.sentiment_score if analysis else 0 %}
+      {% set fill_class = 'high' if score >= 65 else ('mid' if score >= 35 else 'low') %}
+
+      <div class="comp-card" style="animation-delay: {{ loop.index0 * 0.08 }}s">
+
+        <!-- Card Header -->
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="comp-avatar">{{ comp.name[0]|upper }}</div>
+            <div>
+              <div class="comp-name">{{ comp.name }}</div>
+              <div class="comp-url">{{ comp.url }}</div>
+            </div>
+          </div>
+          <div class="card-header-right">
+            {% if analysis %}
+            <span class="ts" data-es="Último análisis:" data-en="Last analysis:">Último análisis:</span>
+            <span class="ts">{{ analysis.timestamp.strftime('%d/%m %H:%M') }}</span>
+            {% endif %}
+            <form action="/run-now/{{ comp.id }}" method="POST" style="display:inline">
+              <button class="btn btn-run" type="submit">▶ ANALIZAR</button>
+            </form>
+            <form action="/delete/{{ comp.id }}" method="POST" style="display:inline"
+                  onsubmit="return confirm('¿Eliminar {{ comp.name }}?')">
+              <button class="btn btn-ghost" type="submit">✕</button>
+            </form>
+          </div>
+        </div>
+
+        {% if not analysis %}
+        <!-- Sin análisis todavía -->
+        <div class="no-analysis">
+          <div class="no-analysis-icon">⏳</div>
+          El worker aún no analizó esta tienda. Hacé clic en <strong>▶ ANALIZAR</strong> para un análisis inmediato.
+        </div>
+
+        {% else %}
+
+        <!-- Card Body -->
+        <div class="card-body">
+
+          <!-- Fila superior: BIAS + SCORE (full width, sin overflow) -->
+          <div class="bias-bar">
+            <div class="bias-value {{ bias_class }}">{{ analysis.bias }}</div>
+            <div class="bias-meta">
+              <div class="bias-score-wrap">
+                <div class="bias-score-num {% if score >= 65 %}text-green{% elif score >= 35 %}text-yellow{% else %}text-red{% endif %}">
+                  {{ score }}<span style="font-size:13px;color:var(--text-dim)">/100</span>
+                </div>
+                <div class="bias-bar-track">
+                  <div class="bias-bar-fill {{ fill_class }}" style="width:{{ score }}%"></div>
+                </div>
+              </div>
+              <div class="bias-groq-tag">Groq · LLaMA 3.3 70B</div>
+            </div>
+          </div>
+
+          <!-- 3 columnas iguales abajo -->
+          <div class="card-cols">
+
+            <!-- Col 1: Score detalle -->
+            <div class="card-section" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+              <div style="font-size:9px; letter-spacing:3px; color:var(--text-dim); text-transform:uppercase; margin-bottom:8px;" data-es="Puntuación Sentimiento" data-en="Sentiment Score">Puntuación Sentimiento</div>
+              <div style="font-size:96px; font-family:'Syne',sans-serif; font-weight:800; line-height:1; {% if score >= 65 %}color:var(--green); text-shadow: 0 0 40px rgba(0,216,138,0.4){% elif score >= 35 %}color:var(--yellow); text-shadow: 0 0 40px rgba(255,201,77,0.4){% else %}color:var(--red); text-shadow: 0 0 40px rgba(255,59,92,0.4){% endif %}">
+                {{ score }}
+              </div>
+              <div style="font-size:10px; color:var(--text-dim); margin-top:8px;" data-es="puntos de agresividad" data-en="aggressiveness points">puntos de agresividad</div>
+            </div>
+
+            <!-- Col 2: Alpha Opportunity -->
+            <div class="card-section">
+              <div class="section-label" data-es="Oportunidad Alpha" data-en="Alpha Opportunity">Oportunidad Alpha</div>
+              {% if analysis.alpha_opportunity %}
+              <div class="alpha-box">
+                <span class="alpha-tag" data-es="⚡ ALPHA DETECTADO" data-en="⚡ ALPHA DETECTED">⚡ ALPHA DETECTADO</span>
+                <div class="alpha-text">{{ analysis.alpha_opportunity }}</div>
+              </div>
+              {% else %}
+              <div class="ts" data-es="Sin oportunidad detectada." data-en="No opportunity detected.">Sin oportunidad detectada.</div>
+              {% endif %}
+            </div>
+
+            <!-- Col 3: High Conviction Bets -->
+            <div class="card-section">
+              <div class="section-label" data-es="Apuestas de Alta Convicción" data-en="High Conviction Bets">Apuestas de Alta Convicción</div>
+              {% if bets %}
+              <div class="bets-list">
+                {% for bet in bets[:3] %}
+                <div class="bet-item">
+                  <div class="bet-prob">{{ bet.probability if bet.probability else '—' }}</div>
+                  <div>
+                    <div class="bet-text">{{ bet.bet }}</div>
+                    <div class="bet-meta">
+                      ⏱ {{ bet.timeframe if bet.timeframe else '—' }}
+                      {% if bet.reasoning %} · {{ bet.reasoning[:60] }}{% if bet.reasoning|length > 60 %}…{% endif %}{% endif %}
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="ts" data-es="Sin bets generados." data-en="No bets generated.">Sin bets generados.</div>
+              {% endif %}
+            </div>
+
+          </div><!-- /card-cols -->
+        </div><!-- /card-body -->
+
+        {% endif %} {# end if analysis #}
+
+        <!-- Products Footer -->
+        {% if products %}
+        <div class="card-products">
+          <div class="products-header">
+            <span data-es="// Últimos precios scrapeados" data-en="// Latest scraped prices">// Últimos precios scrapeados</span>
+            <span>{{ products|length }} <span data-es="productos" data-en="products">productos</span></span>
+          </div>
+          <div class="products-grid">
+            {% for p in products[:10] %}
+            <div class="product-cell">
+              <div class="product-name" title="{{ p.product_name }}">{{ p.product_name }}</div>
+              <div class="product-price">${{ "%.2f"|format(p.price) }}</div>
+              <div class="product-time">{{ p.timestamp.strftime('%H:%M') }}</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+      {% endfor %}
+
+    </div>
+    {% endif %}
+
+  </main>
+
+  <!-- ═══ FOOTER STATUS BAR ════════════════════════════════════ -->
+  <footer class="footer">
+    <div class="footer-item"><div class="footer-dot"></div> Flask OK</div>
+    <div class="footer-item"><div class="footer-dot"></div> SQLite OK</div>
+    <div class="footer-item"><div class="footer-dot"></div> Groq LLaMA 3.3 70B</div>
+    <div class="ticker-wrap">
+      <div class="ticker">
+        {% if dashboard_data %}
+          {% for item in dashboard_data %}
+            {% if item.analysis %}
+              ▶ {{ item.competitor.name }}: {{ item.analysis.bias }} | Score {{ item.analysis.sentiment_score }} &nbsp;&nbsp;&nbsp;&nbsp;
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          ▶ Sin datos — Agregá competidores para empezar &nbsp;&nbsp;&nbsp;&nbsp;
+        {% endif %}
+      </div>
+    </div>
+    <div>{{ now.strftime('%Y-%m-%d %H:%M') }} UTC</div>
+    <div style="margin-left:auto; color:var(--text-dim); font-size:10px; letter-spacing:1px;">
+      BY <span style="color:var(--accent); font-weight:600;">JOAQUIN RIQUELME</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // ── AUTO REFRESH ─────────────────────────────────────────────
+  setTimeout(() => location.reload(), 5 * 60 * 1000);
+
+  // ── SENTIMENT BAR ANIMATION ──────────────────────────────────
+  window.addEventListener('load', () => {
+    document.querySelectorAll('.sentiment-fill').forEach(el => {
+      const w = el.style.width;
+      el.style.width = '0';
+      requestAnimationFrame(() => {
+        setTimeout(() => { el.style.width = w; }, 100);
+      });
+    });
+
+    // Restaurar idioma guardado
+    const saved = localStorage.getItem('warroom_lang') || 'es';
+    setLang(saved, false);
+  });
+
+  // ── LANGUAGE SWITCHER ─────────────────────────────────────────
+  function setLang(lang, save = true) {
+    if (save) localStorage.setItem('warroom_lang', lang);
+
+    // Activar botón correcto
+    document.getElementById('btn-es').classList.toggle('active', lang === 'es');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+
+    // Traducir todos los elementos con data-es / data-en
+    document.querySelectorAll('[data-es][data-en]').forEach(el => {
+      el.textContent = el.getAttribute('data-' + lang);
+    });
+
+    // Traducir placeholders de inputs
+    document.querySelectorAll('[data-placeholder-es]').forEach(el => {
+      const key = 'data-placeholder-' + lang;
+      if (el.hasAttribute(key)) el.placeholder = el.getAttribute(key);
+    });
+
+    // Guardar lang en cookie para que Flask lo lea si se necesita en el futuro
+    document.cookie = `warroom_lang=${lang};path=/;max-age=31536000`;
+  }
+</script>
+</body>
+</html>

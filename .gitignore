@@ -1,0 +1,14 @@
+# Keys y credenciales — NUNCA subir a GitHub
+.env
+credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Sistema
+.DS_Store
+Thumbs.db
