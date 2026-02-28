@@ -125,8 +125,8 @@ def generate_market_thesis(productos_json: list[dict], competitor_id: int,
 
     # Fix para el error 'proxies' en versiones nuevas de httpx
     import httpx
-    http_client = httpx.Client()
-    client = Groq(api_key=api_key, http_client=http_client)
+    http_client = httpx.Client(timeout=30.0)
+    client = Groq(api_key=api_key, http_client=http_client, max_retries=2)
     system_prompt = SYSTEM_PROMPT_ES if lang == "es" else SYSTEM_PROMPT_EN
 
     log.info(f"  🤖 Enviando {len(productos_json)} productos a LLaMA 3.3 70B (lang={lang})...")
