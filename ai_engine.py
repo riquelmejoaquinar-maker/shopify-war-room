@@ -2,8 +2,7 @@
 #
 # Usa Groq + LLaMA 3.3 70B para analizar precios de competidores
 # y generar estrategias de mercado accionables en JSON.
-from dotenv import load_dotenv
-load_dotenv()
+
 import json
 import logging
 import os
@@ -124,7 +123,10 @@ def generate_market_thesis(productos_json: list[dict], competitor_id: int,
     if not api_key:
         raise ValueError("GROQ_API_KEY no está configurada en las variables de entorno.")
 
-    client = Groq(api_key=api_key)
+    # Fix para el error 'proxies' en versiones nuevas de httpx
+    import httpx
+    http_client = httpx.Client()
+    client = Groq(api_key=api_key, http_client=http_client)
     system_prompt = SYSTEM_PROMPT_ES if lang == "es" else SYSTEM_PROMPT_EN
 
     log.info(f"  🤖 Enviando {len(productos_json)} productos a LLaMA 3.3 70B (lang={lang})...")
